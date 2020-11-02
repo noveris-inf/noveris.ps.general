@@ -38,6 +38,44 @@ Set-StrictMode -Version 2
 $InformationPreference = "Continue"
 $ErrorActionPreference = "Stop"
 
+<#
+#>
+Function Get-RemoteClassInstance
+{
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ClassName,
+
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ComputerName
+    )
+
+    process
+    {
+        #Attempt via CIM first
+        try {
+            Get-CimInstance -Property * -ComputerName $ComputerName -ClassName $ClassName
+            return
+        } catch {
+            Write-Warning "Failed to retrieve information via CIM: $_"
+        }
+
+        # Fallback to WMI
+        try {
+            Get-WmiObject -Property * -ComputerName $ComputerName -Class $ClassName
+            return
+        } catch {
+            Write-Warning "Failed to retrieve information via WMI: $_"
+        }
+
+        # Nothing worked, write-error
+        Write-Error "No remaining methods to retrieve class information from system"
+    }
+}
+
 ########
 # If required, retrieve a list of the systems using supplied parameters
 if ($PSCmdlet.ParameterSetName -eq "retrieve")
@@ -78,7 +116,7 @@ $results = $Systems | ForEach-Object {
         LicenseStatus = -1
         LicenseReason = -1
         LicenseDescription = ""
-        ProductKeyChannel = -1
+        ProductKeyChannel = ""
         KMSServer = ""
     }
 
@@ -87,7 +125,7 @@ $results = $Systems | ForEach-Object {
         Write-Verbose "Retrieving licensing information"
 
         # Get licensing information
-        $license = Get-CimInstance SoftwareLicensingProduct -ComputerName $name |
+        $license = Get-RemoteClassInstance -ClassName SoftwareLicensingProduct -ComputerName $name |
             Where-Object { $_.LicenseStatus -gt 0 } |
             Sort-Object -Property LicenseStatus |
             Select-Object -First 1
@@ -106,11 +144,30 @@ $results = $Systems | ForEach-Object {
             default { $state.LicenseStatus = "$licenseStatus (unknown)" }
         }
 
-        $state.LicenseProduct = $license.Name
-        $state.LicenseReason = $license.LicenseStatusReason
-        $state.ProductKeyChannel = $license.ProductKeyChannel
-        $state.KMSServer = $license.DiscoveredKeyManagementServiceMachineName
-        $state.LicenseDescription = $license.Description
+        if (($license | Get-Member).Name -contains "Name")
+        {
+            $state.LicenseProduct = $license.Name
+        }
+
+        if (($license | Get-Member).Name -contains "LicenseStatusReason")
+        {
+            $state.LicenseReason = $license.LicenseStatusReason
+        }
+
+        if (($license | Get-Member).Name -contains "ProductKeyChannel")
+        {
+            $state.ProductKeyChannel = $license.ProductKeyChannel
+        }
+
+        if (($license | Get-Member).Name -contains "DiscoveredKeyManagementServiceMachineName")
+        {
+            $state.KMSServer = $license.DiscoveredKeyManagementServiceMachineName
+        }
+
+        if (($license | Get-Member).Name -contains "Description")
+        {
+            $state.LicenseDescription = $license.Description
+        }
     } catch {
         Write-Warning "Failed to retrieve licensing information from ${name}: $_"
     }
@@ -119,7 +176,7 @@ $results = $Systems | ForEach-Object {
     try {
         Write-Verbose "Retrieving system info"
 
-        $sysinfo = Get-CimInstance -ComputerName $name -Property * Win32_OperatingSystem
+        $sysinfo = Get-RemoteClassInstance -ComputerName $name -ClassName Win32_OperatingSystem
         $state.Type = $sysinfo.Caption
         $state.Version = $sysinfo.Version
     } catch {
@@ -133,7 +190,7 @@ $results = $Systems | ForEach-Object {
 # Display output. Format as CSV, if requested
 if ($AsCSV)
 {
-    $results | ConvertTo-CSV
+    $results | ConvertTo-CSV -NoTypeInformation
 } else {
     $results
 }
