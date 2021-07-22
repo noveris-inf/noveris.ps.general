@@ -1,0 +1,29 @@
+name: Latest
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  Build:
+    name: "Build"
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+        with:
+          submodules: true
+
+      - name: Build
+        shell: pwsh
+        run: |
+          ./Build.ps1 -Stages Build,Test,Upload
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_USERNAME: ${{ github.actor }}
+          DOCKER_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          DOCKER_REGISTRY: docker.pkg.github.com
+          DOCKER_BASEPATH: ${{ github.repository }}
+          DOCKER_TAGS: "main-latest"
