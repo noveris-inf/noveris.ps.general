@@ -37,11 +37,9 @@ Invoke-CIProfile -Name $Profile -Steps @{
     }
 
     pr = @{
-        # Dependencies = $("lint")
     }
 
     latest = @{
-        # Dependencies = $("lint")
     }
 
     release = @{
