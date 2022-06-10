@@ -23,7 +23,7 @@ $version
 Invoke-CIProfile -Name $Profile -Steps @{
 
     lint = @{
-        Script = {
+        Steps = {
             Use-PowershellGallery
             Install-Module PSScriptAnalyzer -Scope CurrentUser
             Import-Module PSScriptAnalyzer
